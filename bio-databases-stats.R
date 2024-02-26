@@ -84,37 +84,82 @@ uniprot_new.df <- uniprot_new.df[!is.na(uniprot_new.df$Date),]
 uniprot.df <- uniprot.df[!uniprot.df$Date %in% uniprot_new.df$Date,]
 uniprot_full.df <- rbind(uniprot.df[, c('Date', 'UniProtKB')], uniprot_new.df)
 
-yearsU <- range(format(uniprot_full.df$Date, "%Y"))
 
+
+# PDB
+url <- "https://www.wwpdb.org/stats/deposition" 
+webpage <- read_html(url)
+
+tables <- html_table(webpage, fill = TRUE, header = FALSE)
+# Assuming the table you want is the first one
+rcsb.df <- tables[[1]]
+
+colnames(rcsb.df) <- str_replace(rcsb.df[2,], ' ', '_')
+rcsb.df <- rcsb.df[3:nrow(rcsb.df),]
+rcsb.df <- rcsb.df[rcsb.df$Year != 'Total',] %>% as.data.frame()
+for (col in colnames(rcsb.df)) {
+  print(col)
+  rcsb.df[, col] <- as.numeric(rcsb.df[, col])
+}
+
+rcsb.df <- rcsb.df[, c('Year', 'Total_Depositions')]
+rcsb.df$Total_Depositions <- cumsum(rcsb.df$Total_Depositions)
+rcsb.df$Date <- as.Date(paste("01 01", rcsb.df$Year), format="%d %m %Y")
+
+
+
+yearsU <- range(format(uniprot_full.df$Date, "%Y"))
 years <- c('1990', max(format(genbank.df.l$Date, "%Y")))
-jan_firsts <- seq(as.Date(paste0(min(c(years, yearsU)), "-01-01")),
-                  as.Date(paste0(max(c(years, yearsU)), "-01-01")),
+yearsPDB <- range(format(rcsb.df$Date, "%Y"))
+
+jan_firsts <- seq(as.Date(paste0(min(c(years, yearsU, yearsPDB)), "-01-01")),
+                  as.Date(paste0(max(c(years, yearsU, yearsPDB)), "-01-01")),
                   by = "1 year")
 
 
-p1 <- ggplot(uniprot_full.df, aes(x=Date, y=UniProtKB)) + 
-  geom_area(color='black', fill='grey', size=1.5, show.legend = T) +
-  scale_y_continuous(labels = label_comma()) +
-  labs(x = '', y= '') +
-  scale_x_date(breaks = rev(rev(jan_firsts)[seq(1, length(jan_firsts), by = 2)]), date_labels = "%Y", limits = c(jan_firsts[1], jan_firsts[length(jan_firsts)]), expand = c(0,0)) +
-  theme_bw() + 
-  theme(axis.text.x = element_text(angle = 90),
-        panel.grid.minor = element_blank(),
-        panel.grid.major.x = element_blank())
-
-
-p2 <- ggplot(genbank.df.l, aes(x=Date, y=entries, color=database, group = database)) + 
+p1 <- ggplot(genbank.df.l, aes(x=Date, y=entries, color=database, group = database)) + 
   # geom_line() +
   geom_area(aes(fill=database), alpha=0.3, size=1.5, position = 'identity') +
   scale_y_continuous(labels = label_comma()) +
   scale_x_date(breaks = rev(rev(jan_firsts)[seq(1, length(jan_firsts), by = 2)]), date_labels = "%Y", limits = c(jan_firsts[1], jan_firsts[length(jan_firsts)]), expand = c(0,0)) +
   theme_bw() + 
-  labs(x = '', y= '') +
+  labs(x = '', y= '', title = 'DNA sequences at NCBI') +
   scale_fill_manual(values = c('WGSSequences' = '#009bff', 'GenBankSequences' = 'black' )) +
   scale_color_manual(values = c('WGSSequences' = '#009bff', 'GenBankSequences' = 'black' )) +
-  theme(axis.text.x = element_text(angle = 90),
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    legend.position = c(0, 1), # Top left corner of the plot area
+    legend.justification = c(0, 1), # Anchor point is top left
+    legend.margin = margin(10, 10, 10, 10), # Adjust margin to reduce space around legend, if needed
+    text = element_text(face = 'bold'),
+    legend.background = element_blank(),
+    legend.title = element_blank()
+  )
+
+
+p2 <- ggplot(uniprot_full.df, aes(x=Date, y=UniProtKB)) + 
+  geom_area(color='#009d66', fill='#009d66', alpha=0.2, size=1.5, show.legend = T) +
+  scale_y_continuous(labels = label_comma()) +
+  labs(x = '', y= '', title = 'Protein sequences in UniProt') +
+  scale_x_date(breaks = rev(rev(jan_firsts)[seq(1, length(jan_firsts), by = 2)]), date_labels = "%Y", limits = c(jan_firsts[1], jan_firsts[length(jan_firsts)]), expand = c(0,0)) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        text = element_text(face = 'bold'),
         panel.grid.minor = element_blank(),
         panel.grid.major.x = element_blank())
 
-p2 / p1
+
+p3 <- ggplot(rcsb.df, aes(x = Date, y=Total_Depositions)) +
+  geom_area(color = '#4c0094', fill = '#4c0094', alpha = 0.3, size = 1.5) +
+  scale_y_continuous(labels = label_comma()) +
+  scale_x_date(breaks = rev(rev(jan_firsts)[seq(1, length(jan_firsts), by = 2)]), date_labels = "%Y", limits = c(jan_firsts[1], jan_firsts[length(jan_firsts)]), expand = c(0,0)) +
+  theme_bw() + 
+  labs(x = '', y= '', title = 'Protein structures in the PDB') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        text = element_text(face = 'bold'),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank())
+
+p1 / p2 /p3
 
